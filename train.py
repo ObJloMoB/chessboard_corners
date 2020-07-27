@@ -24,13 +24,13 @@ def train(opts):
     model = Model().to(device)
     
     # Define dataloaders
-    train_loader, val_loader = split_trainval(opts.data)
+    train_loader, val_loader = split_trainval(opts.data, opts.bs)
     
     # Define loss
-    loss_criter = nn.MSELoss().to(device)
+    loss_criter = nn.L1Loss().to(device)
 
     # Define optimizer
-    optimizer = Adam(model.parameters(), lr=opts.lr)
+    optimizer = Adam(model.parameters(), lr=opts.lr, weight_decay=1e-6)
     scheduler = StepLR(optimizer, step_size=int(opts.epoch/2), gamma=0.1)
 
     # Training loop
@@ -51,27 +51,27 @@ def train(opts):
 
             running_loss += loss.item() * inputs.size(0)
 
-            print(f'epoch num {epoch:02d} batch num {batch_num:04d} train mse {loss:02.04f}', end='\r')
+            print(f'epoch num {epoch:02d} batch num {batch_num:04d} train loss {loss:02.04f}', end='\r')
 
         epoch_loss = running_loss / len(train_loader.dataset)
 
         # Val cycle
         running_loss = 0.0
         model.eval()
-        for inputs, gray, labels in val_loader:
+        for inputs, labels in val_loader:
             inputs = inputs.to(device)
             labels = labels.to(device)
             
             with torch.no_grad():
                 outputs = model(inputs)
-                loss = loss_criter(outputs_f, labels_f)
+                loss = loss_criter(outputs, labels)
             running_loss += loss.item() * inputs.size(0)
         epoch_val_loss = running_loss / len(val_loader.dataset)
         print(f'\n\nepoch num {epoch:02d} train loss {epoch_loss:02.04f} val loss {epoch_val_loss:02.04f}')
 
         scheduler.step()
         if (epoch + 1) % opts.save_every == 0:
-            torch.save(model.state_dict(), os.path.join(opts.output, f'checkpoint_size{opts.size}_e{epoch}of{opts.epoch}_lr{opts.lr:.01E}.pth'))
+            torch.save(model.state_dict(), os.path.join(opts.output, f'checkpoint_size{opts.size}_e{epoch+1}of{opts.epoch}_lr{opts.lr:.01E}.pth'))
 
 
 if __name__ == '__main__':
@@ -88,12 +88,10 @@ if __name__ == '__main__':
                         default=30, type=int)
     parser.add_argument('--bs', help='BS',
                         default=64, type=int)
-    parser.add_argument('--edge_w', help='EDGE W',
-                        default=0.5, type=float)
     parser.add_argument('--save_every', help='Save every N epoch',
                         default=10, type=int)
     parser.add_argument('--output', help='snapshot fld',
-                        default='.', type=str)
+                        default='logs', type=str)
 
     args = parser.parse_args()
     train(args)
